@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Character Relationship Dashboard</title>
+    
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <style>
+        :root {
+            --bg-main: #0f0f12;
+            --panel-bg: #16161f;
+            --panel-secondary: #1f1f2e;
+            --accent: #00ffd0;
+            --accent-hover: #00cca6;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #27273a;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Left Control/Legend Sidebar */
+        #left-sidebar {
+            width: 280px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-sizing: border-box;
+        }
+
+        /* Right Search/Data Panel */
+        #right-sidebar {
+            width: 340px;
+            background-color: var(--panel-bg);
+            border-left: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-sizing: border-box;
+        }
+
+        /* Center Graph Frame */
+        #main-canvas {
+            flex-grow: 1;
+            position: relative;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, #14141c 0%, #0f0f12 100%);
+        }
+
+        #network-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        h1, h2 {
+            margin: 0;
+            letter-spacing: 0.5px;
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            color: var(--accent);
+            text-transform: uppercase;
+        }
+
+        h2 {
+            font-size: 0.9rem;
+            color: var(--text-main);
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 6px;
+        }
+
+        .desc-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* Form & Filtering Components */
+        .search-box-wrapper {
+            display: flex;
+            gap: 8px;
+        }
+
+        input[type="text"], select {
+            background-color: var(--panel-secondary);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            outline: none;
+            width: 100%;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus, select:focus {
+            border-color: var(--accent);
+        }
+
+        button {
+            background-color: var(--accent);
+            color: #000;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--accent-hover);
+        }
+
+        /* Relationship Legend Component */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: rgba(0,0,0,0.15);
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+        }
+
+        .legend-pill {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        /* Dynamic Relationship Detail Feed */
+        #detail-feed {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 4px;
+        }
+
+        .feed-card {
+            background-color: var(--panel-secondary);
+            border: 1px solid var(--border);
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .feed-card span {
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        #loading-notice {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1rem;
+            color: var(--accent);
+            font-weight: 500;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="left-sidebar">
+        <h1>Nadir Matrix</h1>
+        <p class="desc-text">An organized directory tracking cross-character dynamics. Drag nodes to reshape, scroll to zoom details.</p>
+        
+        <div>
+            <h2>Color Indices</h2>
+            <div class="legend-list" style="margin-top: 8px;">
+                <div class="legend-row"><div class="legend-pill" style="background: #ff5252;"></div> Conflict / Discomfort</div>
+                <div class="legend-row"><div class="legend-pill" style="background: #2ecc71;"></div> Positive / Supportive</div>
+                <div class="legend-row"><div class="legend-pill" style="background: #f1c40f;"></div> Kinship / Core Alliance</div>
+                <div class="legend-row"><div class="legend-pill" style="background: #3498db;"></div> Complex / Exploratory</div>
+            </div>
+        </div>
+
+        <p class="desc-text" style="margin-top: auto; font-size: 0.75rem;">To update changes: download your Google Sheet as a CSV, overwrite <code>data.csv</code>, and reload.</p>
+    </div>
+
+    <div id="main-canvas">
+        <div id="loading-notice">Assembling network matrix structure...</div>
+        <div id="network-container"></div>
+    </div>
+
+    <div id="right-sidebar">
+        <div>
+            <h2>Search Directory</h2>
+            <div class="search-box-wrapper" style="margin-top: 8px;">
+                <input type="text" id="search-input" placeholder="Type character name...">
+                <button id="search-btn">Search</button>
+            </div>
+        </div>
+
+        <div>
+            <h2>Quick Selector</h2>
+            <div style="margin-top: 8px;">
+                <select id="quick-dropdown">
+                    <option value="ALL">-- Display Complete Network --</option>
+                </select>
+            </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
+            <h2 id="feed-title">Active Connections</h2>
+            <div id="detail-feed" style="margin-top: 8px;">
+                <div class="desc-text">Select or search for a character to populate precise connection tracking logs.</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        let networkInstance = null;
+        let allNodesRaw = [];
+        let allEdgesRaw = [];
+
+        function getRelationshipColor(status) {
+            status = status.toUpperCase();
+            if (status.includes('ANGUISH') || status.includes('DISCOMFORT') || status.includes('HATE') || status.includes('REVENUE')) {
+                return { color: '#ff5252', highlight: '#ff7979' };
+            }
+            if (status.includes('FRIEND') || status.includes('LIKE') || status.includes('FOND') || status.includes('PROUD') || status.includes('RESPECT')) {
+                return { color: '#2ecc71', highlight: '#55efc4' };
+            }
+            if (status.includes('FAMILY') || status.includes('LOVE') || status.includes('TRUST')) {
+                return { color: '#f1c40f', highlight: '#ffeaa7' };
+            }
+            return { color: '#3498db', highlight: '#74b9ff' };
+        }
+
+        fetch('data.csv')
+            .then(response => response.text())
+            .then(csvData => {
+                document.getElementById('loading-notice').style.display = 'none';
+                
+                const parsed = Papa.parse(csvData, { skipEmptyLines: true });
+                const rows = parsed.data;
+                if (rows.length === 0) return;
+
+                const headers = rows[0];
+                const quickDropdown = document.getElementById('quick-dropdown');
+
+                // 1. Generate Global Graph Nodes
+                for (let i = 1; i < headers.length; i++) {
+                    const name = headers[i].trim();
+                    if (name) {
+                        allNodesRaw.push({ id: name, label: name });
+                        
+                        let opt = document.createElement('option');
+                        opt.value = name;
+                        opt.innerHTML = name;
+                        quickDropdown.appendChild(opt);
+                    }
+                }
+
+                // 2. Generate Global Graph Edges
+                for (let rowIdx = 1; rowIdx < rows.length; rowIdx++) {
+                    const currentRow = rows[rowIdx];
+                    if (!currentRow || currentRow.length === 0) continue;
+
+                    const sourcePlayer = currentRow[0].trim();
+                    if (!sourcePlayer) continue;
+
+                    for (let colIdx = 1; colIdx < currentRow.length; colIdx++) {
+                        if (!headers[colIdx]) continue;
+
+                        const targetPlayer = headers[colIdx].trim();
+                        const status = currentRow[colIdx] ? currentRow[colIdx].trim() : '';
+
+                        if (!status || status === 'NOT MET' || status === '-' || sourcePlayer === targetPlayer) {
+                            continue;
+                        }
+
+                        allEdgesRaw.push({
+                            from: sourcePlayer,
+                            to: targetPlayer,
+                            label: status,
+                            color: getRelationshipColor(status),
+                            font: { color: '#ffffff', size: 10, background: '#121216', strokeWidth: 0 }
+                        });
+                    }
+                }
+
+                // Initial render showing everything clean
+                applyFiltering('ALL');
+
+                // Event Listeners for Search Button and Inputs
+                document.getElementById('search-btn').addEventListener('click', executeTextSearch);
+                document.getElementById('search-input').addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') executeTextSearch();
+                });
+                quickDropdown.addEventListener('change', (e) => {
+                    document.getElementById('search-input').value = ''; // clear text box input
+                    applyFiltering(e.target.value);
+                });
+            });
+
+        function executeTextSearch() {
+            const query = document.getElementById('search-input').value.trim().toLowerCase();
+            if (!query) {
+                applyFiltering('ALL');
+                return;
+            }
+
+            // Look for a close character match match
+            const matchedNode = allNodesRaw.find(node => node.id.toLowerCase().includes(query));
+            if (matchedNode) {
+                document.getElementById('quick-dropdown').value = matchedNode.id;
+                applyFiltering(matchedNode.id);
+            } else {
+                alert("Character not located in database context headers.");
+            }
+        }
+
+        function applyFiltering(targetSelection) {
+            let filteredNodes = [];
+            let filteredEdges = [];
+            const feedContainer = document.getElementById('detail-feed');
+            const feedTitle = document.getElementById('feed-title');
+
+            if (targetSelection === 'ALL') {
+                filteredNodes = allNodesRaw;
+                filteredEdges = allEdgesRaw;
+                feedTitle.innerHTML = "Active Connections";
+                feedContainer.innerHTML = `<div class="desc-text">Select or search for a character to isolate custom logs.</div>`;
+            } else {
+                // Filter targeted links
+                filteredEdges = allEdgesRaw.filter(edge => edge.from === targetSelection || edge.to === targetSelection);
+                
+                const bounds = new Set([targetSelection]);
+                filteredEdges.forEach(edge => { bounds.add(edge.from); bounds.add(edge.to); });
+                filteredNodes = allNodesRaw.filter(node => bounds.has(node.id));
+
+                // Populate Right Feed with clean readability
+                feedTitle.innerHTML = `${targetSelection}'s Ties`;
+                feedContainer.innerHTML = '';
+
+                if (filteredEdges.length === 0) {
+                    feedContainer.innerHTML = `<div class="desc-text">No active data links recorded for this player.</div>`;
+                } else {
+                    filteredEdges.forEach(edge => {
+                        const card = document.createElement('div');
+                        card.className = 'feed-card';
+                        if (edge.from === targetSelection) {
+                            card.innerHTML = `Feels <span>${edge.label}</span> towards <strong>${edge.to}</strong>`;
+                        } else {
+                            card.innerHTML = `<strong>${edge.from}</strong> feels <span>${edge.label}</span> towards them`;
+                        }
+                        feedContainer.appendChild(card);
+                    });
+                }
+            }
+            renderNetwork(filteredNodes, filteredEdges);
+        }
+
+        function renderNetwork(nodesArray, edgesArray) {
+            const container = document.getElementById('network-container');
+            const data = {
+                nodes: new vis.DataSet(nodesArray.map(n => ({
+                    id: n.id,
+                    label: n.label,
+                    shape: 'dot',
+                    size: 20,
+                    font: { color: '#ffffff', size: 13, face: 'Segoe UI' },
+                    color: { background: '#16161f', border: '#00ffd0', highlight: { background: '#00ffd0', border: '#ffffff' } },
+                    borderWidth: 2
+                }))),
+                edges: new vis.DataSet(edgesArray.map(e => ({
+                    ...e,
+                    arrows: 'to',
+                    selectionWidth: 3,
+                    smooth: { type: 'cubicBezier', roundness: 0.3 }
+                })))
+            };
+
+            // Custom spacing layout configurations to prevent overlaps
+            const options = {
+                physics: {
+                    solver: 'forceAtlas2Based',
+                    forceAtlas2Based: {
+                        gravitationalConstant: -140,
+                        centralGravity: 0.01,
+                        springLength: 200,
+                        springConstant: 0.08,
+                        avoidOverlap: 1.0
+                    },
+                    stabilization: { iterations: 100 }
+                },
+                interaction: { hover: true, hideEdgesOnDrag: true }
+            };
+
+            if (networkInstance) networkInstance.destroy();
+            networkInstance = new vis.Network(container, data, options);
+
+            // Clicking on any bubble in the graph also triggers updates automatically!
+            networkInstance.on("click", function (params) {
+                if (params.nodes.length > 0) {
+                    const nodeName = params.nodes[0];
+                    document.getElementById('quick-dropdown').value = nodeName;
+                    document.getElementById('search-input').value = '';
+                    applyFiltering(nodeName);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
