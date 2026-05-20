@@ -248,17 +248,49 @@
         let allNodesRaw = [];
         let allEdgesRaw = [];
 
+        // Upgraded helper to classify the wide library of custom new statuses
         function getRelationshipColor(status) {
-            status = status.toUpperCase();
-            if (status.includes('ANGUISH') || status.includes('DISCOMFORT') || status.includes('HATE') || status.includes('REVENUE')) {
+            status = status.toUpperCase().trim();
+            
+            // 1. Red Group: Conflict, Avoidance, Discomfort
+            if (
+                status.includes('ANGUISH') || status.includes('DISCOMFORT') || 
+                status.includes('HATE') || status.includes('DESPISE') || 
+                status.includes('REPULSED') || status.includes('DISGUSTED') || 
+                status.includes('HORRIFIED') || status.includes('HOMICIDAL') || 
+                status.includes('TRAUMATIZED') || status.includes('SICKENED') || 
+                status.includes('DISLIKE') || status.includes('ANNOYED') || 
+                status.includes('TORMENTED') || status.includes('HUMILIATED') || 
+                status.includes('DISTASTE') || status.includes('REPULSED')
+            ) {
                 return { color: '#ff5252', highlight: '#ff7979' };
             }
-            if (status.includes('FRIEND') || status.includes('LIKE') || status.includes('FOND') || status.includes('PROUD') || status.includes('RESPECT')) {
-                return { color: '#2ecc71', highlight: '#55efc4' };
-            }
-            if (status.includes('FAMILY') || status.includes('LOVE') || status.includes('TRUST')) {
+            
+            // 2. Gold Group: Kinship, High Trust, Love, Family
+            if (
+                status.includes('FAMILY') || status.includes('LOVE') || 
+                status.includes('TRUST') || status.includes('MARRIED') || 
+                status.includes('SOULMATE') || status.includes('SISTER') || 
+                status.includes('BEST') || status.includes('FOUND') || 
+                status.includes('💗')
+            ) {
                 return { color: '#f1c40f', highlight: '#ffeaa7' };
             }
+            
+            // 3. Green Group: Friendly, Positive, Affectionate
+            if (
+                status.includes('FRIEND') || status.includes('LIKE') || 
+                status.includes('FOND') || status.includes('PROUD') || 
+                status.includes('RESPECT') || status.includes('ADMIRE') || 
+                status.includes('AMUSED') || status.includes('CLOSE') || 
+                status.includes('LOYAL') || status.includes('ADORE') || 
+                status.includes('COOL') || status.includes('HOMIE') || 
+                status.includes('IDOLIZE') || status.includes('BRO')
+            ) {
+                return { color: '#2ecc71', highlight: '#55efc4' };
+            }
+            
+            // 4. Blue Group: Neutral, Complex, Inquisitive, Anxious, Miscellaneous
             return { color: '#3498db', highlight: '#74b9ff' };
         }
 
@@ -300,8 +332,17 @@
 
                         const targetPlayer = headers[colIdx].trim();
                         const status = currentRow[colIdx] ? currentRow[colIdx].trim() : '';
+                        const upperStatus = status.toUpperCase();
 
-                        if (!status || status === 'NOT MET' || status === '-' || sourcePlayer === targetPlayer) {
+                        // Advanced cleanup filters out blank lines, explicitly empty boxes, and messy self-referential rows
+                        if (
+                            !status || status === 'NOT MET' || status === '-' || 
+                            upperStatus.includes('NOT MET') || 
+                            sourcePlayer === targetPlayer || 
+                            upperStatus === 'ME' || upperStatus === 'SELF' || 
+                            upperStatus.includes('DAS ME') || upperStatus.includes('ITS MYSELF') || 
+                            upperStatus.includes('THAT\'S ME') || upperStatus.includes('ME !')
+                        ) {
                             continue;
                         }
 
@@ -315,16 +356,16 @@
                     }
                 }
 
-                // Initial render showing everything clean
+                // Initial layout rendering pass
                 applyFiltering('ALL');
 
-                // Event Listeners for Search Button and Inputs
+                // Bind system interaction fields
                 document.getElementById('search-btn').addEventListener('click', executeTextSearch);
                 document.getElementById('search-input').addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') executeTextSearch();
                 });
                 quickDropdown.addEventListener('change', (e) => {
-                    document.getElementById('search-input').value = ''; // clear text box input
+                    document.getElementById('search-input').value = ''; 
                     applyFiltering(e.target.value);
                 });
             });
@@ -336,13 +377,12 @@
                 return;
             }
 
-            // Look for a close character match match
             const matchedNode = allNodesRaw.find(node => node.id.toLowerCase().includes(query));
             if (matchedNode) {
                 document.getElementById('quick-dropdown').value = matchedNode.id;
                 applyFiltering(matchedNode.id);
             } else {
-                alert("Character not located in database context headers.");
+                alert("Character name was not found in the spreadsheet columns.");
             }
         }
 
@@ -358,14 +398,12 @@
                 feedTitle.innerHTML = "Active Connections";
                 feedContainer.innerHTML = `<div class="desc-text">Select or search for a character to isolate custom logs.</div>`;
             } else {
-                // Filter targeted links
                 filteredEdges = allEdgesRaw.filter(edge => edge.from === targetSelection || edge.to === targetSelection);
                 
                 const bounds = new Set([targetSelection]);
                 filteredEdges.forEach(edge => { bounds.add(edge.from); bounds.add(edge.to); });
                 filteredNodes = allNodesRaw.filter(node => bounds.has(node.id));
 
-                // Populate Right Feed with clean readability
                 feedTitle.innerHTML = `${targetSelection}'s Ties`;
                 feedContainer.innerHTML = '';
 
@@ -407,14 +445,13 @@
                 })))
             };
 
-            // Custom spacing layout configurations to prevent overlaps
             const options = {
                 physics: {
                     solver: 'forceAtlas2Based',
                     forceAtlas2Based: {
                         gravitationalConstant: -140,
                         centralGravity: 0.01,
-                        springLength: 200,
+                        springLength: 220,
                         springConstant: 0.08,
                         avoidOverlap: 1.0
                     },
@@ -426,7 +463,6 @@
             if (networkInstance) networkInstance.destroy();
             networkInstance = new vis.Network(container, data, options);
 
-            // Clicking on any bubble in the graph also triggers updates automatically!
             networkInstance.on("click", function (params) {
                 if (params.nodes.length > 0) {
                     const nodeName = params.nodes[0];
